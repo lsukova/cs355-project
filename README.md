@@ -29,9 +29,9 @@ Deliverables:
 - in-class presentation: short description + demo + attack (if applicable)
 
 Rubric (if points are >10 then 10; if points are < 0 then 0):
-• +6: on-time submission (no late submissions will be accepted) + presentation.
-• +2: for being endorsed by at least one corresponding red team (or instructors).
-• +2: attack each of your blue teams. (in total +4 possible points)
-• +2: if you endorse or attack both your blue teams and you are not contradicted (instructors might attack too so blindly endorsing is not optimal …)
-• -3: for false endorsement or attack
-• -6 for not endorsing or attacking each of your blue teams. (in total a possible -12
+- +6: on-time submission (no late submissions will be accepted) + presentation.
+- +2: for being endorsed by at least one corresponding red team (or instructors).
+- +2: attack each of your blue teams. (in total +4 possible points)
+- +2: if you endorse or attack both your blue teams and you are not contradicted (instructors might attack too so blindly endorsing is not optimal …)
+- -3: for false endorsement or attack
+- -6 for not endorsing or attacking each of your blue teams. (in total a possible -12
