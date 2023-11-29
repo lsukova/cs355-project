@@ -30,67 +30,131 @@ def read_from_file(bob_hashes):
         bob_hashes[result.hexdigest()] = i
     return final_message
 
-HOST = "127.0.0.1"  # The server's hostname or IP address
-PORT = 65432  # The port used by the server
-bob_hashes = {}
-
-bob_public, bob_private = generate_keys()
-priv_key = RSA.import_key(bob_private)
-
-#Connect to alice using sockets
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.connect((HOST, PORT))
-    s.sendall(bob_public)
-    alice_public = s.recv(4096)
-    alice_pub_key = RSA.import_key(alice_public)
+#Return the nonce, tag, and ciphertext from the data sent by Alice
+def parse_data(data):
+    nonce = data.split(b"-----BEGIN NONCE-----\n")
+    nonce = b''.join(nonce)
+    nonce = nonce.split(b"\n-----END NONCE-----\n")
+    data = nonce
+    nonce = nonce[0]
     
-    encrypted_session_key = s.recv(4096)
-    cipher_rsa = PKCS1_OAEP.new(priv_key)
-    session_key = cipher_rsa.decrypt(encrypted_session_key)
+    data.pop(0)
+    data = b''.join(data)
+    tag = data.split(b"-----BEGIN TAG-----\n")
+    tag = b''.join(tag)
+    tag = tag.split(b"\n-----END TAG-----\n")
+    data = tag
+    tag = tag[0]
     
+    data.pop(0)
+    data = b''.join(data)
+    ciphertext = data.split(b"-----BEGIN CIPHER-----\n")
+    ciphertext = b''.join(ciphertext)
+    ciphertext = ciphertext.split(b"\n-----END CIPHER-----\n")
+    ciphertext = ciphertext[0]
+    
+    return nonce, tag, ciphertext
+
+#Encrypt the message data, add headings, and return the entire message,
+#which will be sent to Alice
+def encrypt_msg(final_message, session_key):
     cipher_aes = AES.new(session_key, AES.MODE_EAX)
-    final_message = read_from_file(bob_hashes)
-
     ciphertext, tag = cipher_aes.encrypt_and_digest(final_message.encode("utf-8"))
     nonce = cipher_aes.nonce
     encrypted_msg = "-----BEGIN NONCE-----\n" + nonce.decode("latin-1") + "\n-----END NONCE-----\n"
     encrypted_msg = encrypted_msg + "-----BEGIN TAG-----\n" + tag.decode("latin-1") + "\n-----END TAG-----\n"
     encrypted_msg = encrypted_msg + "-----BEGIN CIPHER-----\n" + ciphertext.decode("latin-1") + "\n-----END CIPHER-----\n"
-    s.sendall(bytes(encrypted_msg, "latin_1"))
     
-    #Sign the message and add it to the final_message
-    # hashed_msg = SHA256.new(bytes(final_message, "utf-8"))
-    # signature = pkcs1_15.new(priv_key).sign(hashed_msg)       
-            
-    # final_message = "-----BEGIN SIGNATURE-----\n" + signature.decode("latin-1") + "\n-----END SIGNATURE-----\n" + final_message
-    # s.sendall(bytes(final_message, "utf-8"))
+    return encrypted_msg
+
+#Return the encrypted session key and signature from the message from Alice
+def parse_key_and_signature(encrypted_session_key):
+    signature = encrypted_session_key.split(b"-----BEGIN SIGNATURE-----\n")
+    signature = b''.join(signature)
+    signature = signature.split(b"\n-----END SIGNATURE-----\n")
+    encrypted_session_key = signature[1]
+    signature = signature[0]
+
+    encrypted_session_key = encrypted_session_key.split(b"-----BEGIN SESSION_KEY-----\n")
+    encrypted_session_key = b''.join(encrypted_session_key)
+    encrypted_session_key = encrypted_session_key.split(b"\n-----END SESSION_KEY-----\n")
+    encrypted_session_key = encrypted_session_key[0]
     
-    
-    # s.sendall(bytes(final_message, "utf-8"))
-    # data = s.recv(4096)
-    
-    # #Parse the signature from Alice
-    # alice_signature = data.split(b"\n-----END SIGNATURE-----\n")
-    # alice_signature = alice_signature[0].split(b"-----BEGIN SIGNATURE-----\n")
-    # alice_signature = alice_signature[1].decode()
-    # hashes = data.split(b"\n-----END SIGNATURE-----\n")
-    # hashes = hashes[1].decode()
-    
-    # #Verify the signature and exit if not verified
-    # hashed_msg = SHA256.new(bytes(hashes, "utf-8"))
-    # try:
-    #     pkcs1_15.new(alice_pub_key).verify(hashed_msg, bytes(alice_signature, "latin-1"))
-    #     print("The signature is valid.")
-    # except Exception as e:
-    #     print ("The signature is not valid.")
-    #     exit(1)
-    
+    return encrypted_session_key, signature
+
+
+#Parse the hashes and check each hash to see if it is the same as any of Bob's
+def check_for_similiar_files(hashes, bob_hashes):
     #Split the message into 5 separate part
-    hashes = hashes.split("-----BEGIN MESSAGE-----\n")
-    hashes = ''.join(hashes)
-    hashes = hashes.split("\n-----END MESSAGE-----\n")
+    hashes = hashes.split(b"-----BEGIN MESSAGE-----\n")
+    hashes = b''.join(hashes)
+    hashes = hashes.split(b"\n-----END MESSAGE-----\n")
             
     #Check if any of the hashes are the same
     for hash in hashes:
-        if hash in bob_hashes:
-            print("file" + str(bob_hashes[hash]) + ".txt is the same as one of Alices's files")
+        if hash.decode() in bob_hashes:
+            print("file" + str(bob_hashes[hash.decode()]) + ".txt is the same as one of Alices's files")
+
+def main():
+    #Use HOST and PORT to connect to Alice
+    HOST = "127.0.0.1" 
+    PORT = 65432
+    bob_hashes = {}
+    bob_public, bob_private = generate_keys()
+    priv_key = RSA.import_key(bob_private)
+
+    #Connect to Alice using sockets
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as conn:
+        conn.connect((HOST, PORT))
+        conn.sendall(bob_public)
+        alice_public = conn.recv(4096)
+        alice_pub_key = RSA.import_key(alice_public)
+        
+        #Receive the encrypted session key from Alice
+        encrypted_session_key = conn.recv(4096)
+        encrypted_session_key, signature = parse_key_and_signature(encrypted_session_key)
+        
+        #Check to see if the signature given is correct
+        try:
+            sig_hash = SHA256.new(encrypted_session_key)
+            pkcs1_15.new(alice_pub_key).verify(sig_hash, signature)
+            print ("The signature is valid.")
+        except (ValueError, TypeError):
+            print ("The signature is not valid.")
+            exit(1)
+        
+        #Decrypt the session key    
+        cipher_rsa = PKCS1_OAEP.new(priv_key)
+        session_key = cipher_rsa.decrypt(encrypted_session_key)
+        
+        #Get the hashes of the text files
+        final_message = read_from_file(bob_hashes)
+
+        #Encrypt hte message with the session key
+        encrypted_msg = encrypt_msg(final_message, session_key)
+        conn.sendall(bytes(encrypted_msg, "latin_1"))
+        
+        #Receive the encrypted hashes from Alice
+        data = conn.recv(4096)
+                
+        #Get hte nonce, tag, and ciphertext from the message
+        nonce, tag, ciphertext = parse_data(data)
+        
+        #Decrypt the data and check the tags to see if the data was tampered with
+        try:
+            #Uncomment one of these to test tampering
+            #ciphertext = b"a" + ciphertext[1:]
+            #tag = get_random_bytes(16)
+            
+            cipher_aes = AES.new(session_key, AES.MODE_EAX, nonce)
+            hashes = cipher_aes.decrypt_and_verify(ciphertext, tag)
+        except (ValueError):
+            print("Tampering Detected")
+            exit(1)
+        
+        #See if Alice and Bob have any similar files
+        check_for_similiar_files(hashes, bob_hashes)
+        exit(0)
+
+if __name__ == '__main__':
+    main()
