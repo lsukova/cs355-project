@@ -105,6 +105,7 @@ def main():
 
     #Connect to Alice using sockets
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as conn:
+        print("Working...")
         conn.connect((HOST, PORT))
         conn.sendall(bob_public)
         alice_public = conn.recv(4096)
@@ -118,7 +119,6 @@ def main():
         try:
             sig_hash = SHA256.new(encrypted_session_key)
             pkcs1_15.new(alice_pub_key).verify(sig_hash, signature)
-            print ("The signature is valid.")
         except (ValueError, TypeError):
             print ("The signature is not valid.")
             exit(1)

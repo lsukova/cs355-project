@@ -102,7 +102,7 @@ def main():
         s.listen()
         conn, addr = s.accept()
         with conn:
-            
+            print("Working...")
             #This is the public key from bob, which we assume alice receives it without being tampered with
             bob_public = conn.recv(4096).decode()
 
