@@ -1,37 +1,19 @@
-# cs355-project
-Intro to Cryptography file transfer project, contributions by Logan Knight, Drew Sukova, and Chase Thompson.
-Class taught by Prof. Zikas.
+# CS 355-project
+## Language Used
+-Python
+## Libraries Used
+-PyCryptodome
+-Hashlib
+-Socket
+## Security Analysis
+Our goal was to make sure that an adversary could not tamper with any of the files through transport without the receiver knowing. We also wanted to make sure that an adversary could not gather any information about the plaintext from any of the ciphertexts. Since we used plaintext headers to help us format the messages, we are only counting the encrypted information, not these headers. Finally, we wanted to make sure that neither Alice nor Bob could gain any information about the other person's code segments, while still checking if they had the same code segments or not.
 
-The project instructions are as follows:
+For our implementation, we first assumed that Bob and Alice shared their public keys with each other in person or through a trusted certificate authority. This way neither of the public keys can be tampered with. So, when the public keys get transferred through the sockets, in reality, they would be handing each other the keys or getting them from the CA.
 
-"Alice and Bob are subcontractors (security auditors) of the same company that claims it has given them different code-segments to audit. They each have received 5 segments of code (each of them is a file of ~500MB). They want to see if they have received the same segment. But … they do not trust each other to show their segments! Your goal is to implement a protocol which will allow them to check the above without any of the parties revealing to the other party the contents of any of its files."
+After they receive the public keys, Alice generates a random 16-byte key that will be used to communicate with Bob throughout the session. Alice encrypts the session key with Bob's public key using PyCryptodomes algorithm based on RSA and OAEP padding. Then Alice runs the key through the hashing function SHA256. This hash then goes through PyCryptodomes pkcs1_15 RSA signing function to give us Alice's digital signature. The signature is prepended to the encrypted session key and sent to Bob. Bob verifies that the signature is indeed Alice's by verifying it with Alice's public key. If the verification is correct, then the communication continues. If not, then the communication is closed.
 
-- You may assume that Alice and Bob might only launch passive attacks—i.e., will
-follow whatever protocol they are given but might locally try to extract information
-from their view.
--- Note that the parties may not follow instructions of the type: “don’t look at the
-received message” or “erase the received message”.
-- The adversary will try to attack the communication between Alice and Bob.
-- Alice and Bob do not initially share a key.
+Next, Bob decrypts the session key using his own private key. Now Alice and Bob can use symmetric encryption to communicate. Then Bob loops through each 500 MB file and runs it through SHA256 to create a hash (Our implementation uses smaller files, but it should work for 500 MB files). Bob creates a dictionary to store the hash and the file number to use later. Each file hash is added to a message. Once all the file hashes have been added, the message is encrypted using AES. A MAC tag and a nonce are created as well. The ciphertext, the tag, and the nonce are all sent to Alice. Alice can use the MAC tag to verify that the data has not been tampered with, and she can also decrypt the data using the nonce and session key. Alice performs the same steps to send the information to Bob, and Bob performs the same steps to decrypt the data.
 
-Each team will have two roles: 
-- Blue: develop a solution to the problem
-- Red: endorse or attack the solution of a dedicated blue team
+The communication between Alice and Bob is finished. Now, they can use the dictionary they created earlier to check if any of the hashes sent from the other party matches any of the hashes they have. If any hashes match, then they know that the other party has that same code segment. 
 
-Protocol Specification
-- Communication: Establish a communication environment to chat between the parties for exchanging the actual protocol-related messages between Alice and Bob. For example you can use socket programming to implement this part. The future exchanged messages are basically the ciphertext/signatures or MACs you may need in different phases of your protocol. So you need to make sure how to encode these cryptographic-related messages to send through the channel you are using.
-- Protocol: This is the actual (potentially interactive) protocol that will be executed in order to perform the secure comparison.
-
-Deliverables:
-- code + spec
-- security analysis: you should specify your security goals and show that they are achieved!
-- attack or endorsement: you may attack the theory (insufficient goals, incorrect argument) or implementation!
-- in-class presentation: short description + demo + attack (if applicable)
-
-Rubric (if points are >10 then 10; if points are < 0 then 0):
-• +6: on-time submission (no late submissions will be accepted) + presentation.
-• +2: for being endorsed by at least one corresponding red team (or instructors).
-• +2: attack each of your blue teams. (in total +4 possible points)
-• +2: if you endorse or attack both your blue teams and you are not contradicted (instructors might attack too so blindly endorsing is not optimal …)
-• -3: for false endorsement or attack
-• -6 for not endorsing or attacking each of your blue teams. (in total a possible -12
+So, we achieved our first goal of preventing tampering through the use of digital signatures and MAC tags. We achieved our second goal of making sure no adversary could gain any information about the plaintexts by using secure symmetric and asymmetric encryption schemes. Finally, we achieved our third goal of making sure that Alice and Bob could not gain any information about the other person's code segments by hashing the code segments before sending them.
