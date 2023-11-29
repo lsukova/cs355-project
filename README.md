@@ -17,3 +17,8 @@ Next, Bob decrypts the session key using his own private key. Now Alice and Bob 
 The communication between Alice and Bob is finished. Now, they can use the dictionary they created earlier to check if any of the hashes sent from the other party matches any of the hashes they have. If any hashes match, then they know that the other party has that same code segment. 
 
 So, we achieved our first goal of preventing tampering through the use of digital signatures and MAC tags. We achieved our second goal of making sure no adversary could gain any information about the plaintexts by using secure symmetric and asymmetric encryption schemes. Finally, we achieved our third goal of making sure that Alice and Bob could not gain any information about the other person's code segments by hashing the code segments before sending them.
+
+## How To Run
+-- Run alice.py (Alice acts as the server so they must be run first)
+-- Run bob.py (Bob acts as the client so they must be run second)
+-- The code segments that match will be printed out on both Alice's side and Bob's side
