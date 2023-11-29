@@ -1,6 +1,6 @@
 # CS 355-project
 ## Language Used
--Python
+- Python
 ## Libraries Used
 - PyCryptodome
 - Hashlib
