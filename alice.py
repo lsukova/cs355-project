@@ -3,6 +3,8 @@ from Crypto.PublicKey import RSA
 import hashlib 
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
+from Crypto.Cipher import PKCS1_OAEP, AES
+from Crypto.Random import get_random_bytes
 
 #Create keys for encrypting, decrypting, and signing
 def generate_keys():
@@ -31,6 +33,7 @@ HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
 PORT = 65432  # Port to listen on (non-privileged ports are > 1023)
 
 alice_public, alice_private = generate_keys()
+session_key = get_random_bytes(16)
 alice_hashes = {}
 
 #Connect to bob using sockets
@@ -46,43 +49,47 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
             conn.sendall(alice_public)
             
-            #This is the message from bob with the hash values and signatures
-            data = conn.recv(4096)
-            
-             #Parse the signature from Alice
-            bob_signature = data.split(b"\n-----END SIGNATURE-----\n")
-            bob_signature = bob_signature[0].split(b"-----BEGIN SIGNATURE-----\n")
-            bob_signature = bob_signature[1].decode()
-            hashes = data.split(b"\n-----END SIGNATURE-----\n")
-            hashes = hashes[1].decode()
-    
-            #Verify the signature and exit if not verified
-            bob_pub_key = RSA.import_key(bob_public)
-            hashed_msg = SHA256.new(bytes(hashes, "utf-8"))
-            try:
-              pkcs1_15.new(bob_pub_key).verify(hashed_msg, bytes(bob_signature, "latin-1"))
-              print("The signature is valid.")
-            except Exception as e:
-              print ("The signature is not valid.")
-              exit(1)
-            
             final_message = read_from_file(alice_hashes)
             
-            #Sign the message and add it to the final_message
-            priv_key = RSA.import_key(alice_private)
-            hashed_msg = SHA256.new(bytes(final_message, "utf-8"))
-            signature = pkcs1_15.new(priv_key).sign(hashed_msg)       
-            final_message = "-----BEGIN SIGNATURE-----\n" + signature.decode("latin-1") + "\n-----END SIGNATURE-----\n" + final_message
-            conn.sendall(bytes(final_message, "utf-8"))
+            bob_pub_key = RSA.import_key(bob_public)
+            cipher_rsa = PKCS1_OAEP.new(bob_pub_key)
+            encrypted_session_key = cipher_rsa.encrypt(session_key)
+            conn.sendall(encrypted_session_key)
+            
+            #This is the message from bob with the hash values 
+            data = conn.recv(4096)
+            
+            nonce = data.split(b"-----BEGIN NONCE-----\n")
+            nonce = b''.join(nonce)
+            nonce = nonce.split(b"\n-----END NONCE-----\n")
+            data = nonce
+            nonce = nonce[0]
+            
+            data.pop(0)
+            data = b''.join(data)
+            tag = data.split(b"-----BEGIN TAG-----\n")
+            tag = b''.join(tag)
+            tag = tag.split(b"\n-----END TAG-----\n")
+            data = tag
+            tag = tag[0]
+            
+            data.pop(0)
+            data = b''.join(data)
+            ciphertext = data.split(b"-----BEGIN CIPHER-----\n")
+            ciphertext = b''.join(ciphertext)
+            ciphertext = ciphertext.split(b"\n-----END CIPHER-----\n")
+            ciphertext = ciphertext[0]
+            cipher_aes = AES.new(session_key, AES.MODE_EAX, nonce)
+            hashes = cipher_aes.decrypt_and_verify(ciphertext, tag)
             
             #Split the message into 5 separate parts
-            hashes = hashes.split("-----BEGIN MESSAGE-----\n")
-            hashes = ''.join(hashes)
-            hashes = hashes.split("\n-----END MESSAGE-----\n")
+            hashes = hashes.split(b"-----BEGIN MESSAGE-----\n")
+            hashes = b''.join(hashes)
+            hashes = hashes.split(b"\n-----END MESSAGE-----\n")
             
             #Check if any of the hashes are the same
             for hash in hashes:
-                if hash in alice_hashes:
-                    print("file" + str(alice_hashes[hash]) + ".txt is the same as one of Bob's files")
+                if hash.decode() in alice_hashes:
+                    print("file" + str(alice_hashes[hash.decode()]) + ".txt is the same as one of Bob's files")
             exit(0)
             

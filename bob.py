@@ -1,8 +1,10 @@
 import socket
 from Crypto.PublicKey import RSA
 import hashlib 
-from Crypto.Hash import SHA256
 from Crypto.Signature import pkcs1_15
+from Crypto.Hash import SHA256
+from Crypto.Cipher import PKCS1_OAEP, AES
+from Crypto.Random import get_random_bytes
 
 
 #Create keys for encrypting, decrypting, and signing
@@ -33,44 +35,57 @@ PORT = 65432  # The port used by the server
 bob_hashes = {}
 
 bob_public, bob_private = generate_keys()
+priv_key = RSA.import_key(bob_private)
 
 #Connect to alice using sockets
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.connect((HOST, PORT))
     s.sendall(bob_public)
+    alice_public = s.recv(4096)
+    alice_pub_key = RSA.import_key(alice_public)
     
+    encrypted_session_key = s.recv(4096)
+    cipher_rsa = PKCS1_OAEP.new(priv_key)
+    session_key = cipher_rsa.decrypt(encrypted_session_key)
+    
+    cipher_aes = AES.new(session_key, AES.MODE_EAX)
     final_message = read_from_file(bob_hashes)
+
+    ciphertext, tag = cipher_aes.encrypt_and_digest(final_message.encode("utf-8"))
+    nonce = cipher_aes.nonce
+    encrypted_msg = "-----BEGIN NONCE-----\n" + nonce.decode("latin-1") + "\n-----END NONCE-----\n"
+    encrypted_msg = encrypted_msg + "-----BEGIN TAG-----\n" + tag.decode("latin-1") + "\n-----END TAG-----\n"
+    encrypted_msg = encrypted_msg + "-----BEGIN CIPHER-----\n" + ciphertext.decode("latin-1") + "\n-----END CIPHER-----\n"
+    s.sendall(bytes(encrypted_msg, "latin_1"))
     
     #Sign the message and add it to the final_message
-    priv_key = RSA.import_key(bob_private)
-    hashed_msg = SHA256.new(bytes(final_message, "utf-8"))
-    signature = pkcs1_15.new(priv_key).sign(hashed_msg)       
+    # hashed_msg = SHA256.new(bytes(final_message, "utf-8"))
+    # signature = pkcs1_15.new(priv_key).sign(hashed_msg)       
             
-    final_message = "-----BEGIN SIGNATURE-----\n" + signature.decode("latin-1") + "\n-----END SIGNATURE-----\n" + final_message
-    s.sendall(bytes(final_message, "utf-8"))
+    # final_message = "-----BEGIN SIGNATURE-----\n" + signature.decode("latin-1") + "\n-----END SIGNATURE-----\n" + final_message
+    # s.sendall(bytes(final_message, "utf-8"))
     
-    alice_public = s.recv(4096)
-    s.sendall(bytes(final_message, "utf-8"))
-    data = s.recv(4096)
     
-    #Parse the signature from Alice
-    alice_signature = data.split(b"\n-----END SIGNATURE-----\n")
-    alice_signature = alice_signature[0].split(b"-----BEGIN SIGNATURE-----\n")
-    alice_signature = alice_signature[1].decode()
-    hashes = data.split(b"\n-----END SIGNATURE-----\n")
-    hashes = hashes[1].decode()
+    # s.sendall(bytes(final_message, "utf-8"))
+    # data = s.recv(4096)
     
-    #Verify the signature and exit if not verified
-    alice_pub_key = RSA.import_key(alice_public)
-    hashed_msg = SHA256.new(bytes(hashes, "utf-8"))
-    try:
-        pkcs1_15.new(alice_pub_key).verify(hashed_msg, bytes(alice_signature, "latin-1"))
-        print("The signature is valid.")
-    except Exception as e:
-        print ("The signature is not valid.")
-        exit(1)
+    # #Parse the signature from Alice
+    # alice_signature = data.split(b"\n-----END SIGNATURE-----\n")
+    # alice_signature = alice_signature[0].split(b"-----BEGIN SIGNATURE-----\n")
+    # alice_signature = alice_signature[1].decode()
+    # hashes = data.split(b"\n-----END SIGNATURE-----\n")
+    # hashes = hashes[1].decode()
     
-    #Split the message into 5 separate parts
+    # #Verify the signature and exit if not verified
+    # hashed_msg = SHA256.new(bytes(hashes, "utf-8"))
+    # try:
+    #     pkcs1_15.new(alice_pub_key).verify(hashed_msg, bytes(alice_signature, "latin-1"))
+    #     print("The signature is valid.")
+    # except Exception as e:
+    #     print ("The signature is not valid.")
+    #     exit(1)
+    
+    #Split the message into 5 separate part
     hashes = hashes.split("-----BEGIN MESSAGE-----\n")
     hashes = ''.join(hashes)
     hashes = hashes.split("\n-----END MESSAGE-----\n")
