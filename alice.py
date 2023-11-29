@@ -78,7 +78,8 @@ def check_for_similiar_files(hashes, alice_hashes):
         if hash.decode() in alice_hashes:
             print("file" + str(alice_hashes[hash.decode()]) + ".txt is the same as one of Bob's files")
 
-def encrypt_session_key(bob_pub_key, session_key, priv_key):
+#Encrypt and sign the session key
+def encrypt_and_sign_session_key(bob_pub_key, session_key, priv_key):
     cipher_rsa = PKCS1_OAEP.new(bob_pub_key)
     encrypted_session_key = cipher_rsa.encrypt(session_key)
     key_hash = SHA256.new(encrypted_session_key)
@@ -108,7 +109,7 @@ def main():
             conn.sendall(alice_public)
 
             bob_pub_key = RSA.import_key(bob_public)
-            encrypted_session_key = encrypt_session_key(bob_pub_key, session_key, priv_key)
+            encrypted_session_key = encrypt_and_sign_session_key(bob_pub_key, session_key, priv_key)
             conn.sendall(bytes(encrypted_session_key, "latin_1"))
             
             #This is the message from bob with the hash values 
