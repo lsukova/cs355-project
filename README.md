@@ -2,9 +2,9 @@
 ## Language Used
 -Python
 ## Libraries Used
--PyCryptodome
--Hashlib
--Socket
+- PyCryptodome
+- Hashlib
+- Socket
 ## Security Analysis
 Our goal was to make sure that an adversary could not tamper with any of the files through transport without the receiver knowing. We also wanted to make sure that an adversary could not gather any information about the plaintext from any of the ciphertexts. Since we used plaintext headers to help us format the messages, we are only counting the encrypted information, not these headers. Finally, we wanted to make sure that neither Alice nor Bob could gain any information about the other person's code segments, while still checking if they had the same code segments or not.
 
